@@ -201,7 +201,7 @@ class DocsManager:
                 with st.spinner(session_state['_']("Generating response...")):
                     # Get condensed question, sources, and AI response
                     condensed_question = self.client.get_condensed_question(user_message, chat_history_tuples)
-                    sources = self.client.get_sources(condensed_question)
+                    sources = self.client.get_sources(condensed_question.content)
                     all_output = self.client.get_answer(session_state['prompt_options_docs'][0], sources,
                                                         condensed_question)
                     ai_response = all_output['output_text']
@@ -368,7 +368,7 @@ class DocsManager:
         condensed_question = self.client.get_condensed_question(user_message, [])
 
         # Retrieve sources from the document that are relevant to the condensed question
-        sources = self.client.get_sources(condensed_question)
+        sources = self.client.get_sources(condensed_question.content)
 
         # Get the AI-generated answer based on the prompt options, sources, and condensed question
         all_output = self.client.get_answer(

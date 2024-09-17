@@ -31,7 +31,6 @@ class SessionManager:
 
         session_state['username'] = self.cookies.get('username')
 
-
     def verify_and_set_user_session(self):
         """
         Verify the user's session validity. If cookies indicate the session is not yet initiated,
@@ -43,10 +42,10 @@ class SessionManager:
         It also ensures that a username is assigned for the session. If the username is not found in the cookies,
         a random username is generated combining letters and digits and assigned for the duration of the session.
         """
-        if self.cookies and self.cookies.get('session') != 'in':
-            st.switch_page("start.py")
+        #if self.cookies and self.cookies.get('session') != 'in':
+        #    st.switch_page("start.py")
 
-        session_state['username'] = self.cookies.get('username')
+        session_state['username'] = self.cookies.get('username', None)
         # If there's no username in the cookies then just generate a random one for the session
         if not session_state['username']:
             alphabet = string.ascii_letters + string.digits

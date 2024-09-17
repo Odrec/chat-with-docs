@@ -12,7 +12,7 @@ from src.language_manager import LanguageManager
 load_dotenv()
 
 st.set_page_config(
-    page_title="kiwi",
+    page_title="Chat with PDFs",
     page_icon="🥝",
     layout="wide",
     initial_sidebar_state="expanded"

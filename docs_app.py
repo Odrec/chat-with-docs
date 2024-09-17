@@ -10,6 +10,10 @@ from src.language_manager import LanguageManager
 from src.session_manager import SessionManager
 from src.ai_client import AIClient
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Streamlit page config
 st.set_page_config(page_title="Chat with your document", layout="wide", page_icon="🥝")
 

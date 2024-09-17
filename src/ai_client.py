@@ -9,13 +9,28 @@ from openai import OpenAI
 from typing import Any, Dict, List
 
 from langchain.chains.chat_vector_db.prompts import CONDENSE_QUESTION_PROMPT
-from langchain.chains.conversational_retrieval.base import _get_chat_history
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
-from langchain.chains import LLMChain
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma, VectorStore
+from langchain_chroma import Chroma
+from langchain_community.vectorstores import VectorStore
 from langchain.docstore.document import Document
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.pydantic_v1 import BaseModel, Field
+
+
+class InMemoryHistory(BaseChatMessageHistory, BaseModel):
+    """In memory implementation of chat message history."""
+    messages: List[BaseMessage] = Field(default_factory=list)
+
+    def add_messages(self, messages: List[BaseMessage]) -> None:
+        """Add a list of messages to the store."""
+        self.messages.extend(messages)
+
+    def clear(self) -> None:
+        self.messages = []
 
 
 class AIClient:
@@ -32,12 +47,17 @@ class AIClient:
             @st.cache_resource
             def load_langchain_data(model_name):
                 llm = ChatOpenAI(model_name=model_name, openai_api_key=os.getenv('OPENAI_API_KEY'))
-                question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
+                prompt = CONDENSE_QUESTION_PROMPT
+
+                # Create the chain using Runnables
+                question_generator = prompt | llm
                 return llm, question_generator
 
             self.client_lc, self.question_generator = load_langchain_data(self.model)
             self.embeddings = OpenAIEmbeddings(model="text-embedding-3-large",
                                                openai_api_key=self.openai_key)  # Adjust model as required
+            self.session_id = "1"  # Use a unique identifier per user/session
+            self.store = {}
 
         else:
             pass
@@ -74,12 +94,50 @@ class AIClient:
         if 'accessible_models_extra' not in session_state:
             session_state['accessible_models_extra'] = default_extra_models['models']
 
+    def get_by_session_id(self, session_id: str) -> BaseChatMessageHistory:
+        """Retrieve or create a chat message history based on session_id."""
+        if session_id not in self.store:
+            self.store[session_id] = InMemoryHistory()
+        return self.store[session_id]
+
+    @staticmethod
+    def get_chat_history(chat_history: List[tuple]) -> str:
+        chat_history_string = ""
+        for human_msg, ai_msg in chat_history:
+            if human_msg:
+                chat_history_string += f"Human: {human_msg}\n"
+            if ai_msg:
+                chat_history_string += f"AI: {ai_msg}\n"
+        return chat_history_string
+
     def get_condensed_question(self, user_input: str, chat_history_tuples):
         """
-        This function adds context to the user query, by combining it with the chat history
+        This function adds context to the user query by combining it with the chat history.
         """
-        condensed_question = self.question_generator.predict(
-            question=user_input, chat_history=_get_chat_history(chat_history_tuples)
+        # Transform the history tuples into BaseMessages
+        context_messages = self.get_chat_history(chat_history_tuples)
+
+        # Prepare inputs for the chain
+        inputs = {
+            'question': user_input,
+            'chat_history': context_messages
+        }
+
+        # Ensure the Runnable with message history context
+        question_runnable = RunnableWithMessageHistory(
+            runnable=self.question_generator,
+            get_session_history=self.get_by_session_id,
+            input_messages_key="question",
+            history_messages_key="context_input"
+        )
+
+        # Configuration for session context
+        config = {"configurable": {"session_id": self.session_id}}
+
+        # Invoke the sequence with correct inputs
+        condensed_question = question_runnable.invoke(
+            input=inputs,
+            config=config
         )
         return condensed_question
 
